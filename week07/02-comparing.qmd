@@ -1,0 +1,212 @@
+---
+title: "Seminar 3: Comparing Documents and Clustering"
+subtitle: "LSE MY459: Quantitative Text Analysis"
+date-modified: "3 March 2025"
+toc: true
+format: html
+execute:
+  echo: true
+  eval: false
+---
+
+**Note**: we have set the document-level default for `eval` to be `false` (see above). This means none of the code chunks below will run when you render the file. However, you may wish to change this to `true` while you are actively working with the document so that the code runs when you render.
+
+First, let's do some "directory management" by specifying the file path to the folder on your computer where you wish to store this week's seminar materials. 
+
+```{r}
+## What is the full path to the directory for this week's seminar files?
+wdir <- "" # <- paste your path here
+```
+
+## Distance metrics
+
+Let's load some packages we will need.
+
+```{r}
+library("tidyverse")
+library("quanteda")
+library("quanteda.textstats")
+```
+
+The function `textstat_simil()` (from `quanteda.textstats`) computes matrices of distances and similarities between documents. It is useful for comparing the feature use across different documents.
+
+For example, we can calculate Euclidean distance between two short texts as follows.
+
+```{r}
+docs <- c("this is document one", "this is document two")
+(doc_dfm <- dfm(tokens(docs)))
+print(textstat_dist(doc_dfm, method="euclidean"))
+```
+
+We can also do the math manually using the formula for Euclidean distance.
+
+```{r}
+sqrt(sum((doc_dfm[1,] - doc_dfm[2,])^2))
+```
+
+We can also calculate cosine similarity between the two documents as follows.
+
+```{r}
+textstat_simil(doc_dfm, method="cosine")
+```
+
+And of course, we can calculate it manually as well.
+
+```{r}
+sum(doc_dfm[1,] * doc_dfm[2,]) / ( sqrt(sum(doc_dfm[1,]^2)) *  sqrt(sum(doc_dfm[2,]^2)) )
+```
+
+Finally, suppose we want to calculate the edit distance of the two strings using Levenshtein distance in base R. We can do so as follows.
+
+```{r}
+adist(docs[1], docs[2])
+```
+
+## $k$-means clustering
+
+Let's load a dataset of movie summaries, collected from <http://www.cs.cmu.edu/~ark/personas/>. You can download it from the course GitHub repository as follows.
+
+```{r}
+## Where is the remote copy of the file?
+rfile <- "https://raw.githubusercontent.com/lse-my459/lectures/master/week07/movie-plots.csv.zip"
+
+## Where will we store the local copy if it?
+lfile <- strsplit(rfile, "/")[[1]]
+lfile <- lfile[length(lfile)]
+lfile <- file.path(wdir, lfile) # creates full file path
+
+## Check if you have the file yet and if not, download it to correct location
+if(!file.exists(lfile)){
+  download.file(rfile, lfile)
+}
+```
+
+This is a zip file, so we'll need to unzip it and read the csv into R. 
+
+```{r}
+movie <- read_csv(unz(lfile, "movie-plots.csv"), col_types="cccc")
+```
+
+Now, we create a corpus of all "recent" movies (since 2010)
+
+```{r}
+mcorp <- movie %>%
+  corpus(text_field = "plot") %>% # This tells quanteda which variable contains the text
+  corpus_subset(release_year>=2010) # only look at moves after 2010
+docnames(mcorp) <- docvars(mcorp)$name # Make the document names more intuitive
+```
+
+Let's create a couple document feature matrices of movies since 2010, doing some preprocessing. 
+
+```{r}
+# This is the original "raw" dfm with some basic preprocessing
+mdfm <- mcorp %>% 
+  tokens(verbose=TRUE, 
+         remove_punct=TRUE,
+         remove_numbers=TRUE) %>%
+  tokens_remove(stopwords("english")) %>%
+  dfm() 
+
+# This DFM has been cleaned up and weighed to be more useful for clustering
+cdfm <- mdfm %>%
+  dfm_trim(min_docfreq = 5, verbose=TRUE) %>%
+  dfm_weight("prop")
+```
+
+Let's now use $k$-means clustering on the summaries of the plots of "recent" movies. We'll chose $K=5$ clusters. *Note*: since $k$-means clustering begins with a random selection of centroids/clusters, we need to set the seed to ensure we can run this code multiple times and get the same clusters.
+
+```{r}
+set.seed(1) # set random seed to ensure replicability
+
+# This performs the clustering
+kc <- kmeans(cdfm, centers=5)
+
+# How many documents are om each? 
+table(kc$cluster)
+
+# What are the first six films in each of the clusters?
+head(docvars(mcorp)$name[kc$cluster==1])
+head(docvars(mcorp)$name[kc$cluster==2])
+head(docvars(mcorp)$name[kc$cluster==3])
+head(docvars(mcorp)$name[kc$cluster==4])
+head(docvars(mcorp)$name[kc$cluster==5])
+```
+
+Now let's try to make sense of these clusters, so that we can eventually label them. Some quick looking at the discriminating words might give us some intuitions. But remember: we should do a deeper qualitative examination before settling on labels for these!
+
+```{r}
+# Maybe cluster 1 is romantic movies?
+textstat_keyness(cdfm, target=kc$cluster==1) %>% 
+  head(n=20) %>%
+  print()
+```
+
+```{r}
+# Maybe cluster 2 is action movies?
+textstat_keyness(cdfm, target=kc$cluster==2) %>% 
+  head(n=20) %>%
+  print()
+```
+
+```{r}
+# Maybe cluster 3 is drama films?
+textstat_keyness(cdfm, target=kc$cluster==3) %>% 
+  head(n=20) %>%
+  print()
+```
+
+```{r}
+# Maybe cluster 4 is drama as well?
+textstat_keyness(cdfm, target=kc$cluster==4) %>% 
+  head(n=20) %>%
+  print()
+```
+
+```{r}
+# Maybe cluster 5 is documentaries?
+textstat_keyness(cdfm, target=kc$cluster==5) %>% 
+  head(n=20) %>%
+  print()
+```
+
+## Hierarchical clustering
+
+Hierarchical clustering is an alternative approach to group documents. It relies on the matrix of distances between documents and works from the bottom up to create clusters: starting with lowest pairwise distance, then sequentially merges documents into clusters as the distances become larger.
+
+First, let's load a corpus of U.S. presidents' [State of the Union addresses](https://en.wikipedia.org/wiki/State_of_the_Union), which is available in the `quanteda.corpora` package. We'll focus only on addresses beginning in 1980.
+
+```{r}
+data(data_corpus_sotu, package = "quanteda.corpora")
+pres_dfm <- data_corpus_sotu %>%
+  corpus_subset(Date > "1980-01-01") %>% 
+  tokens(remove_punct = TRUE) %>%
+  tokens_wordstem() %>%
+  tokens_remove(stopwords("en")) %>%
+  dfm() %>% 
+  dfm_trim(min_termfreq = 5, min_docfreq = 3) %>%
+  dfm_weight("prop") # We'll weight the dfm
+```
+
+To perform hierarchical clustering, we begin by getting (Euclidean) distances between documents in the normalised dfm that we just created.
+
+```{r}
+pres_dist_mat <- dist(pres_dfm)
+```
+
+Now we perform the hierarchical clustering using the `hclust()`
+
+```{r}
+pres_cluster <- hclust(pres_dist_mat)
+```
+
+Now we can plot the dendrogram.
+
+```{r}
+plot(pres_cluster)
+```
+
+Finally, if you want to "cut" the dendrogram at a specific height and extract clusters from that, you can do it as follows. In the following code, we cut at 0.05, which generates 3 clusters. If you cut at a lower number, you will get more clusters. 
+
+```{r}
+cutree(pres_cluster, h = 0.05)
+```

@@ -1,0 +1,289 @@
+---
+title: "Seminar 3: Scaling Documents"
+subtitle: "LSE MY459: Quantitative Text Analysis"
+date-modified: "3 March 2025"
+toc: true
+format: html
+execute:
+  echo: true
+  eval: false
+---
+
+**Note**: we have set the document-level default for `eval` to be `false` (see above). This means none of the code chunks below will run when you render the file. However, you may wish to change this to `true` while you are actively working with the document so that the code runs when you render.
+
+First, let's do some "directory management" by specifying the file path to the folder on your computer where you wish to store this week's seminar materials. 
+
+```{r}
+## What is the full path to the directory for this week's seminar files?
+wdir <- "" # <- paste your path here
+```
+
+## Wordscores
+
+In this section, we will replicate the UK manifestos scaling example from LBG 2003. First, let's load the packages we need.
+
+```{r}
+library("quanteda")
+library("quanteda.textmodels")
+```
+
+Load the manifesto data, which is available in the `quanteda.corpora` package.
+
+```{r}
+data(data_corpus_ukmanifestos, package = "quanteda.corpora") # this is a way to load the data without loading the package
+```
+
+Let's create a corpus of manifestos from the three main parties in 1992 and 1997.
+
+```{r}
+ukCorpus <- data_corpus_ukmanifestos %>%
+  corpus_subset(Year %in% c(1992, 1997)) %>%
+  corpus_subset(Party %in% c("Con", "Lab", "LD"))
+```
+
+We'll rename the documents to be a little more concise and easy to read.
+
+```{r}
+docnames(ukCorpus) <- paste(docvars(ukCorpus, "Party"), docvars(ukCorpus, "Year"), sep="_")
+```
+
+Let's create a document feature matrix. We will not do any preprocessing. Recall that [Lowe and Benoit (2013)](https://doi.org/10.1093/pan/mpt002) suggest that you do not need do much pre-processing to calculate wordscores.
+
+```{r}
+ukDfm <- ukCorpus %>%
+  tokens() %>%
+  dfm()
+print(ukDfm)
+```
+
+We will label the first three documents (the 1992 documents), using the expert coded values (see lecture). We'll create a vector of labels for all six documents, although we don't know the labels for the last three (the unlabeled documents!) so we'll set them to `NA`.
+
+```{r}
+docLabels <- c(17.21, 5.35, 8.21, NA, NA, NA)
+```
+
+Now, we can calculate wordscores using the labeled set.
+
+```{r}
+ws <- textmodel_wordscores(ukDfm, docLabels)
+```
+
+Let's look at some word scores for a few of the words in the corpus:
+
+```{r}
+coef(ws)[c("conservative", "law-abiding", "schools", "unemployment", "social")]
+```
+
+We can now use the wordscores to create document level scores for the unlabeled texts.
+
+```{r}
+predict(ws, newdata = ukDfm[4:6,])
+```
+
+Notice the document-level scores for the unlabeled set are very close to each other and seemingly not on the same scale as the labeled documents. This is why we need to rescale (see lecture for details). Using the process recommended by LBG 2003:
+
+```{r}
+predict(ws, newdata = ukDfm[4:6,], rescaling = "lbg")
+```
+
+Using the process recommended by [Martin and Vanberg (2008)](https://www.jstor.org/stable/20299752):
+
+```{r}
+predict(ws, newdata = ukDfm[4:6,], rescaling = "mv")
+```
+
+_Note_: you will get slightly different numbers here than in lecture due to some minor differences in pre-processing.
+
+### Wordscores applied to Twitter data
+
+Let's look at another example of wordscores. In the following file `congress-tweets.csv`, there are 100 randomly sampled tweets from Members of the U.S. Congress, as well as their ideal points based on roll-call votes. (This is a standard way to measure ideology in political science.) Can we replicate the roll-call ideal points using wordscores with the text of their tweets?
+
+First let's find and download the file from the course GitHub page.
+
+```{r}
+## Where is the remote copy of the file?
+rfile <- "https://raw.githubusercontent.com/lse-my459/lectures/master/week07/congress-tweets.csv"
+
+## Where will we store the local copy if it?
+lfile <- strsplit(rfile, "/")[[1]]
+lfile <- lfile[length(lfile)]
+lfile <- file.path(wdir, lfile) # creates full file path
+
+## Check if you have the file yet and if not, download it to correct location
+if(!file.exists(lfile)){
+  download.file(rfile, lfile)
+}
+```
+
+Now, let's read in the CSV and create corpus and DFM objects.
+
+```{r}
+library("tidyverse")
+cong <- read_csv(lfile)
+ccorpus <- cong$text %>%
+  corpus()
+docnames(ccorpus) <- cong$screen_name # update document names to be more informative
+```
+
+Let's make a DFM (which could take a while):
+
+```{r}
+cdfm <- ccorpus %>%
+  tokens(remove_punct = TRUE) %>%
+  dfm() %>%
+  dfm_remove(c(stopwords("english"), "t.co", "https", "rt", "amp", "http", "t.c", "can")) %>% # remove some tokens
+  dfm_trim(min_docfreq = 2) # remove very rare words
+```
+
+Now we can run wordscores on this DFM. 
+
+We'll start by calculating wordscores treating _all_ the tweets as labeled documents, since we do have labels for them all. We're doing this so that we can look at the scores for the individual words.
+
+```{r}
+# running wordscores
+ws <- textmodel_wordscores(cdfm, cong$idealPoint)
+scores.words <- sort(coef(ws)) # This is one way to extract the individual scores for each word
+head(scores.words, n=20) # most discriminant words on the "left"
+tail(scores.words, n=20) # most discriminant words on the "right"
+```
+
+Now let's do a more "typical" example of a Wordscores method by randomly selecting 20 of the Members of Congress to treat as labeled texts and then trying to predict the ideal point for the other 80 using only the word scores. We'll then check to see how good the word scores estimates of ideology are versus the roll-call estimates of ideology.
+
+First, randomly create the unlabeled set.
+
+```{r}
+set.seed(123) # do this to ensure we randomly sample the same 20% of the data each time we run this
+unlabeled <- sample(1:nrow(cong), floor(0.80 * nrow(cong))) # 
+# extracting ideal points and replacing them with missing values
+refpoints <- cong$idealPoint
+refpoints[unlabeled] <- NA
+```
+
+Next, run the wordscores (using the 20 labeled tweets) and predict for the unlabeled documents.
+
+```{r}
+ws <- textmodel_wordscores(cdfm, refpoints) # running wordscores
+preds <- predict(ws, rescaling="lbg") # predicted values
+```
+
+Of course, this was a little bit of a "fake" exercise because we actually _know_ the ideal points for all the members of Congress in this dataset. But let's see how well Wordscores does to recover the known ideal points. First, notice the high correlation:
+
+```{r}
+compare <- tibble(roll.call = cong$idealPoint[unlabeled], word.scores = preds[unlabeled], party=cong$party[unlabeled])
+print(cor(compare$roll.call,compare$word.scores))
+```
+
+In the following plot, the grey diagonal line represents perfect correlation between the known ideal points and the Wordscores estimates. It does pretty good!
+
+```{r}
+compare %>%
+  ggplot(aes(x=roll.call, y=word.scores, color=party)) + 
+  scale_color_manual(values=c("blue","red")) + 
+  geom_abline(slope=1,intercept = 0, color="gray") +
+  geom_point() + 
+  ylab("Wordscores estimates") + 
+  xlab("Ideal points from roll-call votes") + 
+  theme_bw() + 
+  theme(legend.position = "none")
+```
+
+## Wordfish
+
+The following code replicates the Irish 2010 budget debate scaling from Lowe and Benoit (2013). 
+
+```{r}
+# loading data
+library("quanteda")
+library("quanteda.textmodels")
+data(data_corpus_irishbudget2010)
+# making prettier document names
+docnames(data_corpus_irishbudget2010)  <- paste(
+  docvars(data_corpus_irishbudget2010, "name"),
+  docvars(data_corpus_irishbudget2010, "party") )
+# creating DFM
+ieDfm <- data_corpus_irishbudget2010 %>%
+  tokens() %>%
+  dfm()
+
+# fitting wordfish
+wf <- textmodel_wordfish(ieDfm, dir=c(2,1))
+
+# looking at results
+sort(predict(wf))
+
+# extracting rest of parameters
+str(coef(wf))
+
+# let's look at the word-level parameters
+word.params <- data.frame(word=wf$features, mu=wf$beta, psi=wf$psi)
+word.params <- word.params[order(word.params$mu),] # word discrimination
+head(word.params, n=20)
+tail(word.params, n=20)
+
+word.params <- word.params[order(word.params$psi),] # word frequency
+head(word.params, n=20)
+tail(word.params, n=20)
+
+# plotting both into an "Eiffel tower" plot
+ggplot(word.params) + 
+  geom_text(aes(x=mu, y=psi, label=word), color = "darkgray", size = 2.5) + 
+  labs(y = "Word frequency", x = "Word discrimination") + 
+  theme_bw()
+```
+
+### Wordfish applied to Twitter data
+
+To explore an unsupervised approach to ideological scaling, let's scale the dataset of tweets by Members of Congress from week 4. Can we recover a latent ideological dimension based on the text of their tweets?
+
+```{r}
+# Let's first trim even more uncommon words
+cdfm <- cdfm %>%
+  dfm_trim(min_docfreq = 25)
+
+# running wordfish
+wf <- textmodel_wordfish(cdfm, dir=c(34, 42))
+
+# how did we chose the two MCs that identify the model?
+cong$screen_name[34] # this is Senator Reid (majority leader from Democratic Party)
+cong$screen_name[42] # this is Senator Hatch (longest serving Republican)
+
+# looking at results
+wf
+
+# let's look at the word-level parameters
+word.params <- data.frame(word=wf$features, mu=wf$beta, psi=wf$psi)
+word.params <- word.params[order(word.params$mu),] # word discrimination -- e.g., the "ideological" score of each word
+head(word.params, n=20)
+tail(word.params, n=20)
+
+word.params <- word.params[order(word.params$psi),] # word frequency
+head(word.params, n=20)
+tail(word.params, n=20)
+
+# plotting both into an "Eiffel tower" plot
+ggplot(word.params) + 
+  geom_text(aes(x=mu, y=psi, label=word), color = "darkgray", size = 2.5) + 
+  labs(y = "Word frequency", x = "Word discrimination") + 
+  theme_bw()
+```
+
+Similar to what we did with Wordscores, we can compare the estimated positions with the roll-call ideal points.
+
+```{r}
+compare <- tibble(roll.call = cong$idealPoint, word.fish = wf$theta, party=cong$party)
+print(cor(compare$roll.call,compare$word.fish))
+```
+
+Again, in the following plot, the grey diagonal line represents perfect correlation between the known roll-call ideal points and the Wordfish estimates. It does pretty good as well!
+
+```{r}
+compare %>%
+  ggplot(aes(x=roll.call, y=word.fish, color=party)) + 
+  scale_color_manual(values=c("blue","red")) + 
+  geom_abline(slope=1,intercept = 0, color="gray") +
+  geom_point() + 
+  ylab("Wordfish estimates") + 
+  xlab("Ideal points from roll-call votes") + 
+  theme_bw() + 
+  theme(legend.position = "none")
+```

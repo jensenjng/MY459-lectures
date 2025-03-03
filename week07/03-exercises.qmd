@@ -1,0 +1,120 @@
+---
+title: "Seminar 3: Exercises"
+subtitle: "LSE MY459: Quantitative Text Analysis"
+date-modified: "3 March 2025" 
+toc: true
+format: html
+execute:
+  echo: true
+  eval: false
+---
+
+Some directory management, and load all packages you will need.
+
+```{r}
+library("tidyverse")
+library("quanteda")
+library("quanteda.textmodels")
+library("quanteda.textstats")
+
+## What is the full path to the directory for this week's seminar files?
+wdir <- "" # <- paste your path here
+```
+
+## Part 1: Supervised scaling with Wordscores
+
+1. Load the corpus of tweets by Members of Congress from the seminar exercises, create the dfm and then estimate word scores for the words. This time, remove all hashtags and screennames. Plot the top and bottom 10 words. 
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+2. Load the candidate tweets from last week's seminar exercises and create a "consolidated" dfm where every correpsonds to a specific candidate. (You'll need to sum all the rows per candidate using `dfm_group()`.) Do the same preprocessing you did for the above corpus.
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+3. Use the wordscores you just estimated to scale these four candidates. Show the results with no rescaling and with lgb rescaling. Do these results make sense intuitively?
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+## Part 2: Unsupervised scaling with Wordfish
+
+1. Load the inaugural address corpus, only keeping those after 1945. Then, create a DFM after doing some preprocessing: remove punctuation, symbols and numbers, make all words lower case, remove stop words and stem.
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+2. Use the Wordfish method to scale these speeches. You can use Carter's 1977 speech and Bush's 2005 speech to identify the model (i.e., to anchor the scale).
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+3. Create a tibble where each row corresponds to a different type/word in the vocabulary used to fit the Wordfish model. There should be three columns: `word`, `beta` and `psi`, corresponding to the word, the scaled position of the word, and the word frequency. Sort this tibble by `mu`. 
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+4. What are the to 10 words that are most indicative of the "left" side of the scale? what about the 10 words most indicative of the "right" side of the scale? Does this make sense to you?
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+5. Plot an Eiffel tower plot. Plot all words in grey, and then depict 5 words on each "corner" of the Eiffel tower to illustrate words that are not discriminating, and discriminating of each side of the scale, repectively.
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+## Part 3: Similarity
+
+1. Suppose you want to build a recommendation engine for someone who loved the film _Transformers_. This recommendation engine will suggest "similar" films. To do this, we will use the collection of film summaries from the seminar exercises. Load the file and create a corpus of all films since 2000.
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+2. Create a dfm after removing punctuation, numbers and stop words. Also, stem the words in the dfm and remove any words occurring in fewer than 10 documents.
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+3. Now, let's calculate the cosine similarity between one film that serves as the basis for the recommendation algorithm, _Transformers_.
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+4. What are the top five recommendations for films that are most similar to _Transformers_ according to the similarity metric we calculated above?
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+## Part 4: Clustering
+
+1. Using the dfm for the inaugural addresses from 1945, use k-means clustering with 4 clusters, setting the seed at 2025. Are there any discernible patterns?
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+2. Now use hierarchical clustering to create a dendrogram. 
+
+```{r}
+# YOUR ANSWER GOES HERE
+```
+
+3. Cut the tree in a way that you get 4 clusters. Are these the same or different than what you got with $k$-means?
+
+```{r}
+# YOUR ANSWER GOES HERE
+```

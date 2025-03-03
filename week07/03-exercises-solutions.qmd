@@ -1,0 +1,246 @@
+---
+title: "Seminar 3: Exercises"
+subtitle: "LSE MY459: Quantitative Text Analysis"
+date-modified: "3 March 2025" 
+toc: true
+format: html
+execute:
+  echo: true
+  eval: false
+---
+
+Some directory management, and load all packages you will need.
+
+```{r}
+library("tidyverse")
+library("quanteda")
+library("quanteda.textmodels")
+library("quanteda.textstats")
+
+## What is the full path to the directory for this week's seminar files?
+wdir <- "" # <- paste your path here
+```
+
+## Part 1: Supervised scaling with Wordscores
+
+1. Load the corpus of tweets by Members of Congress from the seminar exercises, create the dfm and then estimate word scores for the words. This time, remove all hashtags and screennames. Plot the top and bottom 10 words. 
+
+```{r}
+
+rfile <- "https://raw.githubusercontent.com/lse-my459/lectures/master/week07/congress-tweets.csv"
+
+## Where will we store the local copy if it?
+lfile <- strsplit(rfile, "/")[[1]]
+lfile <- lfile[length(lfile)]
+lfile <- file.path(wdir, lfile) # creates full file path
+
+cong <- read_csv(lfile)
+# Create corpus object and update document names to be more informative
+ccorpus <- cong$text %>%
+  corpus()
+docnames(ccorpus) <- cong$screen_name
+
+cdfm <- ccorpus %>%
+  tokens(remove_punct = TRUE) %>%
+  tokens_remove(c("^[@].+","^[#].+"), valuetype="regex") %>%
+  tokens_tolower() %>%
+  dfm() %>%
+  dfm_remove(c(stopwords("english"), "t.co", "https", "rt", "amp", "http", "t.c", "can")) %>% # remove stop words
+  dfm_trim(min_docfreq = 2) # remove very rare words
+
+ws <- textmodel_wordscores(cdfm, cong$idealPoint)
+
+ws1 <- rev(c(head(sort(coef(ws)), 10), tail(sort(coef(ws)), 10)))
+ws1 <- tibble(Word = factor(names(ws1),levels=names(ws1)), Wordscore = unname(ws1))
+
+ggplot(ws1) + 
+  geom_col(aes(y=Word, x=Wordscore))
+
+```
+
+2. Load the candidate tweets from last week's seminar exercises and create a "consolidated" dfm where every correpsonds to a specific candidate. (You'll need to sum all the rows per candidate using `dfm_group()`.) Do the same preprocessing you did for the above corpus.
+
+```{r}
+## Where is the remote copy of the file?
+rfile <- "https://raw.githubusercontent.com/lse-my459/lectures/master/week04/candidate-tweets.csv"
+
+## Where will we store the local copy if it?
+lfile <- strsplit(rfile, "/")[[1]]
+lfile <- lfile[length(lfile)]
+lfile <- file.path(wdir, lfile) # creates full file path
+
+## Check if you have the file yet and if not, download it to correct location
+if(!file.exists(lfile)){
+  download.file(rfile, lfile)
+}
+tweets <- read_csv(lfile)
+twdfm <- tweets %>%
+  corpus() %>%
+  tokens(remove_punct = TRUE) %>%
+  tokens_remove(c("^[@].+","^[#].+"), valuetype="regex") %>%
+  tokens_tolower() %>%
+  tokens_remove(c(stopwords("english"), "t.co", "https", "rt", "amp", "http", "t.c", "can")) %>%
+  tokens_wordstem() %>% 
+  dfm() %>%
+  dfm_group(screen_name)
+```
+
+3. Use the wordscores you just estimated to scale these four candidates. Show the results with no rescaling and with lgb rescaling. Do these results make sense intuitively?
+
+```{r}
+preds0 <- predict(ws, newdata = twdfm[,colnames(twdfm) %in% colnames(cdfm)])
+preds1 <- predict(ws, newdata = twdfm[,colnames(twdfm) %in% colnames(cdfm)], rescaling="lbg")
+cat("\n")
+print(sort(preds0))
+print(sort(preds1))
+```
+
+## Part 2: Unsupervised scaling with Wordfish
+
+1. Load the inaugural address corpus, only keeping those after 1945. Then, create a DFM after doing some preprocessing: remove punctuation, symbols and numbers, make all words lower case, remove stop words and stem.
+
+```{r}
+inaug.dfm <- data_corpus_inaugural %>%
+  corpus_subset(Year > 1945) %>%
+  tokens(remove_punct = TRUE,
+         remove_symbols = TRUE,
+         remove_numbers = TRUE) %>%
+  tokens_tolower() %>%
+  tokens_remove(stopwords("english")) %>%
+  tokens_wordstem() %>%
+  dfm() 
+```
+
+2. Use the Wordfish method to scale these speeches. You can use Carter's 1977 speech and Bush's 2005 speech to identify the model (i.e., to anchor the scale).
+
+```{r}
+wf <- textmodel_wordfish(inaug.dfm, dir=c(8,15))
+```
+
+3. Create a tibble where each row corresponds to a different type/word in the vocabulary used to fit the Wordfish model. There should be three columns: `word`, `beta` and `psi`, corresponding to the word, the scaled position of the word, and the word frequency. Sort this tibble by `mu`. 
+
+```{r}
+sw <- tibble(word = wf$features, mu = wf$beta, psi=wf$psi) %>%
+  arrange(mu)
+```
+
+4. What are the to 10 words that are most indicative of the "left" side of the scale? what about the 10 words most indicative of the "right" side of the scale? Does this make sense to you?
+
+```{r}
+head(sw,n=10)
+tail(sw,n=10)
+```
+
+5. Plot an Eiffel tower plot. Plot all words in grey, and then depict 5 words on each "corner" of the Eiffel tower to illustrate words that are not discriminating, and discriminating of each side of the scale, repectively.
+
+```{r}
+sw1 <- bind_rows(head(sw,n=5), tail(sw,n=5), tail(arrange(sw, psi), n=5))
+ggplot(sw) + 
+  geom_text(aes(x=mu, y=psi, label=word), color = "gray", size = 2) + 
+  ggrepel::geom_text_repel(data = sw1, aes(x=mu, y=psi, label=word), size = 4, position = position_jitter(), segment.colour = NA) + 
+  labs(y = "Word frequency", x = "Word discrimination") + 
+  theme_bw()
+```
+
+## Part 3: Similarity
+
+1. Suppose you want to build a recommendation engine for someone who loved the film _Transformers_. This recommendation engine will suggest "similar" films. To do this, we will use the collection of film summaries from the seminar exercises. Load the file and create a corpus of all films since 2000.
+
+```{r}
+## Where is the remote copy of the file?
+rfile <- "https://raw.githubusercontent.com/lse-my459/lectures/master/week07/movie-plots.csv.zip"
+
+## Where will we store the local copy if it?
+lfile <- strsplit(rfile, "/")[[1]]
+lfile <- lfile[length(lfile)]
+lfile <- file.path(wdir, lfile) # creates full file path
+
+## Check if you have the file yet and if not, download it to correct location
+if(!file.exists(lfile)){
+  download.file(rfile, lfile)
+}
+
+films <- read_csv(unz(lfile, "movie-plots.csv"), col_types="cccc")
+
+mcorp <- films %>%
+  corpus(text_field = "plot") %>% # This tells quanteda which variable contains the text
+  corpus_subset(release_year>=2000) # only look at moves after 2010
+
+docnames(mcorp) <- docvars(mcorp)$name # Make the document names more intuitive
+```
+
+2. Create a dfm after removing punctuation, numbers and stop words. Also, stem the words in the dfm and remove any words occurring in fewer than 10 documents.
+
+```{r}
+mdfm <- mcorp %>% 
+  tokens(remove_punct=TRUE,
+         remove_numbers=TRUE) %>%
+  tokens_remove(stopwords("en")) %>%
+  tokens_wordstem() %>%
+  dfm() %>%
+  dfm_trim(min_docfreq = 10) 
+```
+
+3. Now, let's calculate the cosine similarity between one film that serves as the basis for the recommendation algorithm, _Transformers_.
+
+```{r}
+fav.film.title <- "Transformers"
+fav.film <- which(docnames(mdfm)==fav.film.title) 
+simil <- textstat_simil(mdfm, y=mdfm[fav.film,], method="cosine")
+```
+
+4. What are the top five recommendations for films that are most similar to _Transformers_ according to the similarity metric we calculated above?
+
+```{r}
+simil <- simil[order(simil, decreasing=TRUE),]
+head(simil, n=5)
+```
+
+## Part 4: Clustering
+
+1. Using the dfm for the inaugural addresses from 1945, use k-means clustering with 4 clusters, setting the seed at 2025. Are there any discernible patterns?
+
+```{r}
+set.seed(2025)
+# This performs the clustering
+kc <- kmeans(inaug.dfm, centers=4)
+
+# How many documents are in each cluster? 
+table(kc$cluster)
+
+# What are the inaugural addresses in each cluster?
+cat("\nDOCUMENT LABELS FOR DOCS IN EACH CLUSTER:\n")
+for(i in 1:4){
+  cat(paste0("\nCluster ", i, ": \n"))
+  docnames(inaug.dfm)[kc$cluster==i] %>% 
+    paste0(collapse = ", ") %>%
+    cat()
+}
+# As far as I can see, no clear discernable pattern, based on the document labels. 
+
+# Now let's look at discriminating words from each cluster
+cat("\n\nMOST DISCRIMINATING WORDS IN EACH CLUSTER:\n")
+for(i in 1:4){
+  cat(paste0("\nCluster ", i, ": \n"))
+  textstat_keyness(inaug.dfm, target=kc$cluster==i) %>% 
+    head(n=20) %>%
+    .[["feature"]] %>%
+    paste0(collapse = ", ") %>%
+    cat()
+}
+# We could _probably_ squint and see some ideas here (e.g., cluster 2 might be speeches with lots of lofty discussion of freedoms in the USA), but would also want to read some of the documents
+```
+
+2. Now use hierarchical clustering to create a dendrogram. 
+
+```{r}
+inaug.dist.mat <- dist(inaug.dfm)
+inaug.cluster <- hclust(inaug.dist.mat)
+plot(inaug.cluster)
+```
+
+3. Cut the tree in a way that you get 4 clusters. Are these the same or different than what you got with $k$-means?
+
+```{r}
+inaug.cluster.4 <- sort(cutree(inaug.cluster, h = 68)) # This will make 4
+```

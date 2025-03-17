@@ -1,0 +1,72 @@
+---
+title: "Gradient descent for logistic regression"
+format: html
+editor: visual
+---
+
+#### Simulating data
+
+```{r}
+# Set seed
+set.seed(123)
+
+# Sample size
+n <- 100000                    
+# Independent variable
+x <- runif(n, -10, 10) 
+# True intercept
+alpha_true <- -3
+# True slope
+beta_true <- 0.8
+# Compute probability with the logistic function
+p <- 1 / (1 + exp(-(alpha_true + beta_true * x)))
+# Simulate binary outcomes
+y <- rbinom(n, size = 1, prob = p)
+
+
+```
+
+#### Gradient descent
+
+```{r}
+# Initialise parameters
+alpha <- 0
+beta <- 0
+learning_rate <- 1
+num_epochs <- 1000
+
+# Gradient Descent Loop
+for (i in 1:num_epochs) {
+  
+  # Predict probabilities
+  p <- 1 / (1 + exp(-(alpha + beta * x)))   
+
+  # Compute gradients
+  grad_alpha <- mean(p-y)
+  grad_beta  <- mean((p-y) * x)
+  
+  # Update parameters
+  alpha <- alpha - learning_rate * grad_alpha
+  beta <- beta - learning_rate * grad_beta
+  
+  # Status update
+  if(i %% (num_epochs/10) == 0) {
+    cat("Epoch:", i, "Estimated alpha:", alpha, "Estimated beta:", beta, "\n")
+  }
+  
+}
+
+# Output the final estimated parameters
+cat("Final estimated alpha:", alpha, "\n")
+cat("Final estimated beta:", beta, "\n")
+```
+
+#### Estimating the model with R's Generalised Linear Models (`glm`) function instead
+
+```{r}
+# Create data frame
+df = data.frame(y=y, x=x)
+
+# Estimate via glm
+glm(y ~ ., data = df, family = binomial)
+```

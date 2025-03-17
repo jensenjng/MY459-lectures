@@ -1,0 +1,72 @@
+---
+title: "Gradient descent for linear regression"
+format: html
+editor: visual
+---
+
+#### Simulating data
+
+```{r}
+# Set seed
+set.seed(123)
+
+# Sample size
+n <- 1000                       
+# Independent variable
+x <- runif(n, -10, 10) 
+# True intercept
+alpha_true <- 2
+# True slope
+beta_true <- 3
+# Error term
+eps <- rnorm(n, mean = 0, sd = 1)
+# Create dependent variable
+y <- alpha_true + beta_true * x + eps
+```
+
+#### Gradient descent
+
+```{r}
+# Initialise parameters
+alpha <- 0
+beta <- 0
+learning_rate <- 0.01
+num_epochs <- 500
+
+# Gradient Descent Loop
+for (i in 1:num_epochs) {
+  
+  # Predict values
+  y_pred <- alpha + beta * x   
+  # Compute residual
+  res <- y - y_pred
+  
+  # Gradients
+  grad_alpha <- -2 * mean(res)       
+  grad_beta  <- -2 * mean(res * x)
+  
+  # Update parameters
+  alpha <- alpha - learning_rate * grad_alpha
+  beta <- beta - learning_rate * grad_beta
+  
+  # Status update
+  if(i %% (num_epochs/10) == 0) {
+    cat("Epoch:", i, "Estimated alpha:", alpha, "Estimated beta:", beta, "\n")
+  }
+  
+}
+
+# Output the final estimated parameters
+cat("Final estimated alpha:", alpha, "\n")
+cat("Final estimated beta:", beta, "\n")
+```
+
+#### Estimating the model with R's Linear Models (`lm`) function instead
+
+```{r}
+# Create data frame
+df = data.frame(y=y, x=x)
+
+# Estimate via lm
+lm(y~.,data=df)
+```

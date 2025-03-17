@@ -1,0 +1,118 @@
+---
+title: "Seminar 4: Exercises"
+subtitle: "MY360/MY459: Quantitative Text Analysis"
+format: html
+editor: visual
+---
+
+#### Exercise 1
+
+Consider the following two matrices. Determine the dimensions of the product $AB$, compute the product manually, and then verify your result by creating and multiplying the matrices in R.
+
+$$A = \begin{pmatrix}1 & 2 \\3 & 4 \\5 & 6\end{pmatrix} \quad \text{and} \quad B = \begin{pmatrix}7 & 8 \\9 & 10\end{pmatrix}$$
+
+```{r}
+
+```
+
+#### Exercise 2
+
+Using the chain rule, what are the derivatives of:
+
+$1)\quad \frac{d}{dx}\Bigl[\bigl(x^2 + 1\bigr)^5\Bigr]$
+
+$2)\quad \frac{d}{dx}\Bigl[\log\left(\sqrt{1+2x}\right)\Bigr]$
+
+#### Exercise 3
+
+In matrix notation, the analytic solution for the linear regression, which we solved with gradient descent in the lecture, is given by the following: $$\hat{\gamma}=(X'X)^{-1}X'y, \quad \text{where} \quad X=\begin{pmatrix}1 & x_{1} \\ 1 & x_{2} \\1 & \dots\end{pmatrix} \quad \text{and} \quad \hat{\gamma} = \begin{pmatrix}\hat{\alpha} \\ \hat{\beta}\end{pmatrix}$$
+
+This formula allows us to revise two concepts we have not discussed in the lecture so far. The transpose of a matrix $A$, denoted $A'$ or $A^T$, is obtained by reflecting $A$ about its main diagonal (the diagonal from the upper left to the lower right). In other words, the entry in the $i$th row and $j$th column of $A$ becomes the entry in the $j$th row and $i$th column of $A^T$:
+
+$\left(A^T\right)_{ij} = a_{ji}, \quad \text{for } 1 \leq i \leq n \text{ and } 1 \leq j \leq m.$
+
+To understand the **inverse** $A^{-1}$ of a matrix intuitively, recall that in the lecture we visualised a matrix as a linear transformation that moves points in space around — multiplying a $2\times2$ matrix could stretch, rotate, or flip a plane. The **inverse** of that matrix is simply the transformation that **undoes** whatever the original matrix did, i.e. brings the points back to their original location. Formally, for a matrix $A$, its inverse $A^{-1}$ (when it exists) is the unique matrix such that multiplying $A$ by $A^{-1}$ yields the identity matrix $I$ (with $I$ being the identity transformation that does nothing, i.e. $AI=A$). In symbols:
+
+$$A \times A^{-1} = I, \quad \text{where} \quad I = \begin{pmatrix}1 & 0 \\0 & 1\end{pmatrix}$$
+
+Thus, this generalises of the scalar relation $a \times \frac{1}{a} = 1$ to matrices.
+
+In R, the transpose is computed with `t()` and the inverse with `solve()` . If you create a new matrix $X$ with `cbind` that contains a column vector of ones and the same $x$ vector as in the lecture code, can you compute $(X'X)^{-1}X'y$ in R and find the same coefficients as we estimated with gradient descent in the lecture?
+
+```{r}
+
+```
+
+#### Exercise 4
+
+Starting with the logistic regression gradient descent code discussed in the lecture, can you modify it such that the loss is computed and displayed at each printout given the current parameter values in that epoch? What effect do you find by modifying the learning rate? What if you standardise the covariate x to have mean 0 and standard deviation 1?
+
+```{r}
+```
+
+#### Exercise 5
+
+Revisiting the neural network code from the lecture, can you adjust the architecture (e.g. further layers, neurons, etc.) such that the classification accuracy improves?
+
+```{r}
+
+```
+
+#### Mini project
+
+In this open-ended question, the task is to use the (structural) topic models discussed last week of to explore textual data in historical books of your choice. If you prefer to further focus on neural networks of this week instead, you can also e.g. classify authors or books by their textual content adjusting the neural network code from the lecture.
+
+Download a book or set of historical books that you are interested in. You can e.g. do this via `gutenbergr`, which is an implementation of project gutenberg.org (see e.g. [this](https://cran.r-project.org/web/packages/gutenbergr/vignettes/intro.html) tutorial), or via Google books https://books.google.com as discussed in the previous lecture. Below is some sample code that you can adjust to get started.
+
+```{r}
+#install.packages("gutenbergr")
+library("gutenbergr")
+library("tidyverse")
+```
+
+All books by an author:
+
+```{r}
+jane_austen_books <- gutenberg_works(author == "Austen, Jane")
+jane_austen_books
+```
+
+Download a specific book by ID:
+
+```{r}
+book <- gutenberg_download(21839)
+book
+```
+
+Store full text in a single element in a character vector:
+
+```{r}
+full_text <- book$text %>% paste(collapse = " ")
+```
+
+Alternative approach separating the text into groups or "documents", each consisting of several lines, which could e.g. be used for topic modelling:
+
+```{r}
+lines_to_combine = 100
+
+# Group df
+book <- book %>%
+  mutate(group_id = ceiling(row_number() / lines_to_combine))
+
+# Create character vector where one element contains 'lines_to_combine' concatenated lines
+grouped_text <- book %>%
+  group_by(group_id) %>%
+  summarise(concatenated = paste(text, collapse = " ")) %>%
+  pull(concatenated) 
+
+# First element
+grouped_text[1]
+# Number of elements/documents
+length(grouped_text)
+```
+
+Your code:
+
+```{r}
+
+```

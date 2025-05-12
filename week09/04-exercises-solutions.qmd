@@ -1,0 +1,257 @@
+---
+title: "Seminar 4: Solutions"
+subtitle: "MY360/MY459: Quantitative Text Analysis"
+format: html
+editor: visual
+---
+
+#### Exercise 1
+
+Consider the following two matrices. Determine the dimensions of the product $AB$, compute the product manually, and then verify your result by creating and multiplying the matrices in R.
+
+$$A = \begin{pmatrix}1 & 2 \\3 & 4 \\5 & 6\end{pmatrix} \quad \text{and} \quad B = \begin{pmatrix}7 & 8 \\9 & 10\end{pmatrix}$$
+
+**Solution:**
+
+The dimensions of the product $AB$ are $3\times2$ and it is given by:
+
+$$\begin{pmatrix}1 & 2 \\3 & 4 \\5 & 6\end{pmatrix} \cdot \begin{pmatrix}7 & 8 \\9 & 10\end{pmatrix}=\begin{pmatrix}25 & 28 \\57 & 64 \\89 & 100\end{pmatrix}$$
+
+In R:
+
+```{r}
+A = matrix(c(1:6), nrow = 3, byrow = TRUE)
+B = matrix(c(7:10), nrow = 2, byrow = TRUE)
+
+A%*%B
+```
+
+#### Exercise 2
+
+Using the chain rule, what are the derivatives of:
+
+$1)\quad \frac{d}{dx}\Bigl[\bigl(x^2 + 1\bigr)^5\Bigr]$
+
+$2)\quad \frac{d}{dx}\Bigl[\log\left(\sqrt{1+2x}\right)\Bigr]$
+
+**Solution:**
+
+$1)\quad 5\bigl(x^2 + 1\bigr)^4*2x=10x*\bigl(x^2 + 1\bigr)^4$
+
+$2)\quad \frac{1}{\sqrt{1+2x}}*0.5*(1+2x)^{-0.5}*2=\frac{1}{1+2x}$
+
+#### Exercise 3
+
+In matrix notation, the analytic solution for the linear regression, which we solved with gradient descent in the lecture, is given by the following: $$\hat{\gamma}=(X'X)^{-1}X'y, \quad \text{where} \quad X=\begin{pmatrix}1 & x_{1} \\ 1 & x_{2} \\1 & \dots\end{pmatrix} \quad \text{and} \quad \hat{\gamma} = \begin{pmatrix}\hat{\alpha} \\ \hat{\beta}\end{pmatrix}$$
+
+This formula allows us to revise two concepts we have not discussed in the lecture so far. The transpose of a matrix $A$, denoted $A'$ or $A^T$, is obtained by reflecting $A$ about its main diagonal (the diagonal from the upper left to the lower right). In other words, the entry in the $i$th row and $j$th column of $A$ becomes the entry in the $j$th row and $i$th column of $A^T$:
+
+$\left(A^T\right)_{ij} = a_{ji}, \quad \text{for } 1 \leq i \leq n \text{ and } 1 \leq j \leq m.$
+
+To understand the **inverse** $A^{-1}$ of a matrix intuitively, recall that in the lecture we visualised a matrix as a linear transformation that moves points in space around — multiplying a $2\times2$ matrix could stretch, rotate, or flip a plane. The **inverse** of that matrix is simply the transformation that **undoes** whatever the original matrix did, i.e. brings the points back to their original location. Formally, for a matrix $A$, its inverse $A^{-1}$ (when it exists) is the unique matrix such that multiplying $A$ by $A^{-1}$ yields the identity matrix $I$ (with $I$ being the identity transformation that does nothing, i.e. $AI=A$). In symbols:
+
+$$A \times A^{-1} = I, \quad \text{where} \quad I = \begin{pmatrix}1 & 0 \\0 & 1\end{pmatrix}$$
+
+Thus, this generalises the scalar relation $a \times \frac{1}{a} = 1$ to matrices.
+
+In R, the transpose is computed with `t()` and the inverse with `solve()`. If you create a new matrix $X$ with `cbind` that contains a column vector of ones and the same $x$ vector as in the lecture code, can you compute $(X'X)^{-1}X'y$ in R and find the same coefficients as we estimated with gradient descent in the lecture?
+
+**Solution:**
+
+```{r}
+# Set seed
+set.seed(123)
+
+# Sample size
+n <- 1000                       
+# Independent variable
+x <- runif(n, -10, 10) 
+# True intercept
+alpha_true <- 2
+# True slope
+beta_true <- 3
+# Error term
+eps <- rnorm(n, mean = 0, sd = 1)
+# Create dependent variable
+y <- alpha_true + beta_true * x + eps
+
+# Modify feature matrix
+X <- cbind(1,x)
+
+# Estimate
+gamma_hat <- solve(t(X)%*%X)%*%t(X)%*%y 
+gamma_hat
+```
+
+#### Exercise 4
+
+Starting with the logistic regression gradient descent code discussed in the lecture, can you modify it such that the loss is computed and displayed at each printout given the current parameter values in that epoch? What effect do you find by modifying the learning rate? What if you standardise the covariate x to have mean 0 and standard deviation 1?
+
+**Solution:**
+
+```{r}
+# Set seed
+set.seed(123)
+
+# Sample size
+n <- 100000                    
+# Independent variable
+x <- runif(n, -10, 10) 
+# True intercept
+alpha_true <- -3
+# True slope
+beta_true <- 0.8
+# Compute probability with the logistic function
+p <- 1 / (1 + exp(-(alpha_true + beta_true * x)))
+# Simulate binary outcomes
+y <- rbinom(n, size = 1, prob = p)
+
+# Initialise parameters
+alpha <- 0
+beta <- 0
+learning_rate <- 10
+num_epochs <- 500
+
+# Standardise x before training
+x <- scale(x)
+
+# Gradient Descent Loop
+for (i in 1:num_epochs) {
+  
+  # Predict probabilities
+  p <- 1 / (1 + exp(-(alpha + beta * x)))   
+
+  # Compute gradients
+  grad_alpha <- mean(p-y)
+  grad_beta  <- mean((p-y) * x)
+  
+  # Update parameters
+  alpha <- alpha - learning_rate * grad_alpha
+  beta <- beta - learning_rate * grad_beta
+  
+  # Compute loss
+  p <- 1 / (1 + exp(-(alpha + beta * x)))  
+  loss <- -mean(y*log(p) + (1-y)*log(1-p))
+  
+  # Status update
+  if(i %% (num_epochs/10) == 0) {
+    cat("Epoch:", i, "Loss:", loss, "Estimated alpha:", alpha, "Estimated beta:", beta, "\n")
+  }
+  
+}
+
+# Output the final estimated parameters
+cat("Final estimated alpha:", alpha, "\n")
+cat("Final estimated beta:", beta, "\n")
+```
+
+Comparison to `glm` function output:
+
+```{r}
+# Create data frame
+df = data.frame(y=y, x=x)
+
+# Estimate via glm
+glm(y ~ ., data = df, family = binomial)
+```
+
+With many features at different scales (e.g. prices, quantities, and percentage changes), standardising all features can improve learning via gradient descent. In the simple example, standardising the single feature to have zero mean and unit standard deviation allows selecting high absolute values of learning rates which can make the gradient descent converge more quickly here. Note that the estimated value of the associated slope coefficient changes significantly after standardisation (since $x$ now has zero mean and unit standard deviation), but if the focus is prediction (i.e. $\hat{y}$) rather than parameter estimation, this would not matter per se.
+
+#### Exercise 5
+
+Revisiting the neural network code from the lecture, can you adjust the architecture (e.g. further layers, neurons, etc.) such that the classification accuracy improves?
+
+**Solution:**
+
+Changing layers, neurons, activation functions, or dropout does not easily yield improvements with this data under the constraint of only using a simple MLP, but increasing the amount of words considered (i.e. columns in a dfm) is able to improve validation and test set outcomes a little bit further relative to the lecture code.
+
+```{r}
+library("keras")
+library("tensorflow")
+```
+
+#### Processing data
+
+```{r}
+
+# Set seed
+set_random_seed(1)
+
+# Considering only the max_words most frequent words
+max_words <- 3000
+
+# Loading data
+reuters <- dataset_reuters(num_words = max_words, test_split = 0.2)
+x_train <- reuters$train$x
+y_train <- reuters$train$y
+x_test <- reuters$test$x
+y_test <- reuters$test$y
+
+cat(length(x_train), "train sequences\n")
+cat(length(x_test), "test sequences\n")
+
+num_classes <- max(y_train) + 1 # +1 because y labels start at 0
+cat(num_classes, "labels\n")
+
+
+# Transform text into relative frequency matrix (mode = "count" would create dfm)
+tokenizer <- text_tokenizer(num_words = max_words)
+x_train <- sequences_to_matrix(tokenizer, x_train, mode = "freq")
+x_test <- sequences_to_matrix(tokenizer, x_test, mode = "freq")
+
+cat("x_train shape:", dim(x_train), "\n")
+cat("x_test shape:", dim(x_test), "\n")
+
+# Create one-hot labels
+y_train <- to_categorical(y_train, num_classes)
+y_test <- to_categorical(y_test, num_classes)
+cat("y_train shape:", dim(y_train), "\n")
+cat("y_test shape:", dim(y_test), "\n")
+```
+
+#### Creating the model
+
+```{r}
+model <- keras_model_sequential()
+model %>%
+  layer_dense(units = 512, input_shape = c(max_words)) %>% 
+  layer_activation(activation = "LeakyReLU") %>% 
+  layer_dropout(rate = 0.25) %>% 
+  layer_dense(units = num_classes) %>% 
+  layer_activation(activation = "softmax")
+
+model %>% compile(
+  loss = "categorical_crossentropy",
+  optimizer = optimizer_adam(learning_rate = 0.01),
+  metrics = c("accuracy")
+)
+model
+```
+
+#### Training
+
+```{r}
+batch_size <- 256
+epochs <- 6
+
+history <- model %>% fit(
+  x_train, y_train,
+  batch_size = batch_size,
+  epochs = epochs,
+  verbose = 1,
+  validation_split = 0.1,
+)
+```
+
+#### Test set accuracy
+
+```{r}
+score <- model %>% evaluate(
+  x_test, y_test,
+  batch_size = batch_size,
+  verbose = 1
+)
+
+cat("Test loss:", score[[1]], "\n")
+cat("Test accuracy", score[[2]], "\n")
+```
